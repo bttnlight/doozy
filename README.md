@@ -1,6 +1,5 @@
-# Doozy (quasar-project)
-
-To-do web app
+# doozy
+A simple To-Do web app built with the Quasar Framework that uses Axios to fetch tasks from the JSONPlaceholder API
 
 ## Install the dependencies
 ```bash
