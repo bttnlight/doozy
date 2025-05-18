@@ -14,7 +14,7 @@ export default defineConfig((/* ctx */) => {
     boot: ['axios'],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
-    css: ['app.css', 'src/css/app.css'],
+    css: ['app.css'],
 
     // https://github.com/quasarframework/quasar/tree/dev/extras
     extras: [
@@ -32,6 +32,15 @@ export default defineConfig((/* ctx */) => {
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build
     build: {
+      // Add Tailwind CSS
+      transpile: true,
+      transpileDependencies: ['quasar'],
+
+      // Add PostCSS with Tailwind
+      postcss: {
+        plugins: [],
+      },
+
       target: {
         browser: ['es2022', 'firefox115', 'chrome115', 'safari14'],
         node: 'node20',
@@ -85,20 +94,33 @@ export default defineConfig((/* ctx */) => {
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#framework
     framework: {
-      config: {},
+      // Quasar components
+      components: [
+        'QLayout',
+        'QPage',
+        'QBtn',
+        'QIcon',
+        'QList',
+        'QItem',
+        'QItemSection',
+        'QTable',
+        'QTr',
+        'QTd',
+        'QCheckbox',
+        'QChip',
+        'QInput',
+        'QSelect',
+        'QDialog',
+        'QCard',
+        'QCardSection',
+        'QCardActions',
+      ],
 
-      // iconSet: 'material-icons', // Quasar icon set
-      // lang: 'en-US', // Quasar language pack
-
-      // For special cases outside of where the auto-import strategy can have an impact
-      // (like functional components as one of the examples),
-      // you can manually specify Quasar components/directives to be available everywhere:
-      //
-      // components: [],
-      // directives: [],
+      // Quasar directives
+      directives: ['Ripple', 'ClosePopup'],
 
       // Quasar plugins
-      plugins: [],
+      plugins: ['Notify', 'Dialog'],
     },
 
     // animations: 'all', // --- includes all animations
