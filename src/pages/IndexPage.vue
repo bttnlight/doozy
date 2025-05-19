@@ -200,7 +200,7 @@
                     <q-item
                       clickable
                       v-close-popup
-                      @click="deleteTask(index)"
+                      @click="confirmAndDeleteTask(task)"
                       class="text-negative"
                     >
                       <q-item-section avatar>
@@ -391,16 +391,25 @@ export default defineComponent({
       }
 
       try {
-        if (this.editingIndex >= 0) {
-          const taskId = this.tasks[this.editingIndex]?.id;
-          if (!taskId || typeof taskId !== 'number' || taskId < 1 || taskId > 200) {
-            console.error('Invalid task ID for update:', taskId);
-            return;
+        const isEditing = this.editingIndex >= 0;
+
+        if (isEditing) {
+          const existingTask = this.tasks[this.editingIndex];
+          const taskId = existingTask?.id;
+
+          if (typeof taskId === 'number' && taskId >= 1 && taskId <= 200) {
+            // Remote task - update via API
+            await axios.put(`${API_URL}/${taskId}`, { ...this.newTask, id: taskId });
           }
 
-          await axios.put(`${API_URL}/${taskId}`, { ...this.newTask, id: taskId });
-          this.tasks.splice(this.editingIndex, 1, { ...this.newTask, id: taskId });
+          // Update local state regardless
+          const updatedTask = { ...this.newTask };
+          if (typeof taskId === 'number') {
+            updatedTask.id = taskId;
+          }
+          this.tasks.splice(this.editingIndex, 1, updatedTask);
         } else {
+          // New task
           const response = await axios.post(API_URL, this.newTask);
 
           const newId =
@@ -431,19 +440,22 @@ export default defineComponent({
 
     async updateTaskCompletion(task: Task, completed: boolean) {
       task.completed = completed;
-      if (!task.id || typeof task.id !== 'number' || task.id < 1 || task.id > 200) {
-        console.warn('Skipping updateTaskCompletion due to invalid or missing task ID:', task.id);
-        return;
-      }
+
+      const isRemoteTask = typeof task.id === 'number' && task.id >= 1 && task.id <= 200;
 
       try {
-        await axios.put(`${API_URL}/${task.id}`, task);
-
-        const index = this.tasks.findIndex((t) => t.id === task.id);
-        if (index !== -1 && this.tasks[index]) {
-          this.tasks[index].completed = task.completed;
+        // 1. Update remote if it's a remote task
+        if (isRemoteTask) {
+          await axios.put(`${API_URL}/${task.id}`, task);
         }
 
+        // 2. Update local state regardless
+        const index = this.tasks.findIndex((t) => t.id === task.id);
+        if (index !== -1) {
+          this.tasks[index]!.completed = completed;
+        }
+
+        // 3. Notify user
         this.$q.notify({
           color: 'positive',
           message: `Task "${task.title}" marked as ${completed ? 'completed' : 'incomplete'}.`,
@@ -451,7 +463,7 @@ export default defineComponent({
           position: 'top-right',
         });
 
-        console.log(`Task ${task.id} completion updated to`, task.completed);
+        console.log(`Task ${task.id} completion updated to`, completed);
       } catch (error) {
         this.$q.notify({
           color: 'negative',
@@ -488,52 +500,43 @@ export default defineComponent({
       }
     },
 
-    async deleteTask(index: number) {
-      const task = this.tasks[index];
-      if (!task?.id || typeof task.id !== 'number' || task.id < 1 || task.id > 200) {
-        console.warn('Invalid task ID for deletion:', task?.id);
-        this.$q.notify({
-          color: 'negative',
-          message: 'Invalid task ID, cannot delete.',
-          icon: 'error',
-        });
-        return;
-      }
-
-      try {
-        const confirmed = await new Promise<boolean>((resolve) => {
-          this.$q
-            .dialog({
-              title: 'Delete Task',
-              message: `Are you sure you want to delete "${task.title}"?`,
-              persistent: true,
-              class: 'delete-dialog',
-              ok: {
-                label: 'Delete',
-                color: 'negative',
-              },
-              cancel: {
-                flat: true,
-              },
-            })
-            .onOk(() => resolve(true))
-            .onCancel(() => resolve(false));
-        });
-
-        if (confirmed) {
-          await axios.delete(`${API_URL}/${task.id}`);
-          this.tasks.splice(index, 1);
-          this.$q.notify({
-            color: 'positive',
-            message: `Task "${task.title}" deleted successfully.`,
-            icon: 'check_circle',
-            position: 'top-right',
+    confirmAndDeleteTask(taskToDelete: Task) {
+      this.$q
+        .dialog({
+          title: 'Delete Task',
+          message: `Are you sure you want to delete "${taskToDelete.title}"?`,
+          persistent: true,
+          ok: { label: 'Delete', color: 'negative' },
+          cancel: { flat: true },
+        })
+        .onOk(() => {
+          this.handleDeleteTask(taskToDelete).catch((error) => {
+            console.error('Error deleting task:', error);
           });
+        })
+        .onCancel(() => {
+          console.log('Deletion cancelled');
+        });
+    },
+
+    async handleDeleteTask(taskToDelete: Task): Promise<void> {
+      try {
+        await axios.delete(`${API_URL}/${taskToDelete.id}`);
+        const taskIndex = this.tasks.findIndex((task) => task.id === taskToDelete.id);
+        if (taskIndex !== -1) {
+          this.tasks.splice(taskIndex, 1);
         }
+
+        this.$q.notify({
+          color: 'positive',
+          message: `Task "${taskToDelete.title}" deleted successfully.`,
+          icon: 'check_circle',
+          position: 'top-right',
+        });
       } catch (error) {
         this.$q.notify({
           color: 'negative',
-          message: `Failed to delete task "${task.title}".`,
+          message: `Failed to delete task "${taskToDelete.title}".`,
           icon: 'error',
           position: 'top-right',
         });
@@ -553,7 +556,7 @@ export default defineComponent({
       try {
         const response = await axios.get<ApiTask[]>(`${API_URL}?_limit=10`);
         this.tasks = response.data.map((task) => {
-          const randomDaysAhead = Math.floor(Math.random() * 30) - 10; // Some tasks can be overdue
+          const randomDaysAhead = Math.floor(Math.random() * 30) - 10;
           const dueDate = new Date();
           dueDate.setDate(dueDate.getDate() + randomDaysAhead);
 
@@ -594,10 +597,10 @@ export default defineComponent({
         'Follow up on this task as soon as possible.',
         'Make sure to allocate enough time for this task.',
         'This task is part of the quarterly objectives.',
-        '', // This is a valid empty string, not `undefined`
+        '', 
         'Remember to check with the team before completing.',
         'This is a recurring task that needs to be done regularly.',
-        '', // Again, still a valid string
+        '',
       ];
       return descriptions[Math.floor(Math.random() * descriptions.length)] as string;
     },
